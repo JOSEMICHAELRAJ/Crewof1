@@ -176,9 +176,14 @@ export async function decideAction(
   // Rule 3: negotiation
   if (situationType === 'negotiation') {
     const draftedMessage = await generateAgentMessage(client, freelancer, invoice, situationType, clientMessage);
+    // Only auto-send if explicit terms were provided AND they're within boundaries.
+    // Without explicit terms we can't verify boundaries, so always draft for approval.
+    const hasExplicitTerms =
+      negotiationTerms.requestedDiscountPct !== undefined ||
+      negotiationTerms.requestedDelayDays !== undefined;
     const inBounds = withinBoundaries(client, freelancer, negotiationTerms);
 
-    return client.autonomyLevel === 2 && inBounds
+    return client.autonomyLevel === 2 && hasExplicitTerms && inBounds
       ? { action: 'AUTO_SEND', draftedMessage }
       : { action: 'DRAFT_FOR_APPROVAL', draftedMessage };
   }
