@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Freelancer {
+  id                    String   @id @default(cuid())
+  name                  String
+  email                 String
+  defaultMaxDiscountPct Int      @default(15)
+  defaultMaxDelayDays   Int      @default(14)
+  escalationKeywords    String   @default("refund,lawyer,cancel,chargeback,dispute")
+  defaultTone           String   @default("friendly")
+  clients               Client[]
+}
+
+model Client {
+  id                     String       @id @default(cuid())
+  freelancerId           String
+  freelancer             Freelancer   @relation(fields: [freelancerId], references: [id])
+  name                   String
+  email                  String
+  company                String?
+  trustScore             Int          @default(20)
+  autonomyLevel          Int          @default(0)
+  manualOverride         Boolean      @default(false)
+  maxDiscountPctOverride Int?
+  maxDelayDaysOverride   Int?
+  toneOverride           String?
+  invoices               Invoice[]
+  messages               Message[]
+  trustEvents            TrustEvent[]
+  createdAt              DateTime     @default(now())
+}
+
+model Invoice {
+  id          String    @id @default(cuid())
+  clientId    String
+  client      Client    @relation(fields: [clientId], references: [id])
+  amount      Float
+  amountPaid  Float     @default(0)
+  description String
+  dueDate     DateTime
+  status      String    @default("draft")
+  messages    Message[]
+  createdAt   DateTime  @default(now())
+}
+
+model Message {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
+  clientId    String
+  client      Client       @relation(fields: [clientId], references: [id])
+  sender      String
+  content     String
+  status      String
+  trustEvents TrustEvent[]
+  createdAt   DateTime     @default(now())
+}
+
+model TrustEvent {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  messageId String?
+  message   Message? @relation(fields: [messageId], references: [id])
+  delta     Int
+  reason    String
+  createdAt DateTime @default(now())
+}
