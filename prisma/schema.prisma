@@ -37,6 +37,7 @@ model Client {
   invoices               Invoice[]
   messages               Message[]
   trustEvents            TrustEvent[]
+  hearings              TrustHearing[]
   createdAt              DateTime     @default(now())
 }
 
@@ -48,6 +49,7 @@ model Invoice {
   amountPaid  Float     @default(0)
   description String
   dueDate     DateTime
+  paidAt      DateTime?
   status      String    @default("draft")
   messages    Message[]
   createdAt   DateTime  @default(now())
@@ -75,4 +77,20 @@ model TrustEvent {
   delta     Int
   reason    String
   createdAt DateTime @default(now())
+}
+
+model TrustHearing {
+  id            String   @id @default(cuid())
+  clientId      String
+  client        Client   @relation(fields: [clientId], references: [id])
+  triggerReason String
+  evidenceJson  String
+  prosecution   String
+  defense       String
+  verdict       String
+  reasoning     String
+  conditions    String?
+  fromLevel     Int
+  toLevel       Int
+  createdAt     DateTime @default(now())
 }
