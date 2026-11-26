@@ -8,6 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const message = await prisma.message.findUnique({ where: { id } });
     if (!message) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
 
+    // Update message status BEFORE applyTrustDelta so evidence counts include this rejection
     const updatedMessage = await prisma.message.update({
       where: { id },
       data: { status: 'rejected' },

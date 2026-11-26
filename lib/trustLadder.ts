@@ -49,6 +49,7 @@ export interface TrustDeltaResult {
   previousLevel: AutonomyLevel;
   leveledUp: boolean;
   leveledDown: boolean;
+  hearingNeeded: boolean;
 }
 
 /**
@@ -72,12 +73,28 @@ export async function applyTrustDelta(
   });
 
   const previousLevel = client.autonomyLevel as AutonomyLevel;
+  const oldScoreLevel = scoreToLevel(client.trustScore);
   const newScore = clampScore(client.trustScore + delta);
+  const proposedLevel = scoreToLevel(newScore);
 
-  // 2. Determine new level (only when not manually pinned)
-  const newLevel: AutonomyLevel = client.manualOverride
-    ? previousLevel
-    : scoreToLevel(newScore);
+  // Promotions no longer apply automatically — the court grants them.
+  // Demotions (score drops) remain immediate.
+  let newLevel: AutonomyLevel;
+  if (client.manualOverride) {
+    newLevel = previousLevel;
+  } else if (proposedLevel < previousLevel) {
+    // Immediate demotion
+    newLevel = proposedLevel;
+  } else {
+    // Promotions are held pending a court hearing
+    newLevel = previousLevel;
+  }
+
+  // A hearing is needed only on a fresh upward crossing and no manual override
+  const hearingNeeded =
+    !client.manualOverride &&
+    proposedLevel > previousLevel &&
+    oldScoreLevel < proposedLevel;
 
   // 3. Persist trust event + update client in a transaction
   await prisma.$transaction([
@@ -103,7 +120,8 @@ export async function applyTrustDelta(
     newScore,
     newLevel,
     previousLevel,
-    leveledUp: newLevel > previousLevel,
+    leveledUp: false, // court grants promotions, not this function
     leveledDown: newLevel < previousLevel,
+    hearingNeeded,
   };
 }

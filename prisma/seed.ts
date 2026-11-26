@@ -7,6 +7,7 @@ async function main() {
 
   // ── Clean up existing data ────────────────────────────────────────────────
   await prisma.trustEvent.deleteMany();
+  await prisma.trustHearing.deleteMany();
   await prisma.message.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.client.deleteMany();
@@ -102,6 +103,42 @@ async function main() {
 
   console.log(`  ✓ Client: ${riya.name} (Level 2, score 82)`);
 
+  // Extra paid invoices for Riya (0-2 days late each)
+  const riyaPaidDates = [
+    { dueOffset: -60, paidOffset: -59 }, // paid 1 day late
+    { dueOffset: -45, paidOffset: -44 }, // paid 1 day late
+    { dueOffset: -30, paidOffset: -28 }, // paid 2 days late
+  ];
+  for (const d of riyaPaidDates) {
+    const dueDate = new Date(Date.now() + d.dueOffset * 24 * 60 * 60 * 1000);
+    const paidAt = new Date(Date.now() + d.paidOffset * 24 * 60 * 60 * 1000);
+    await prisma.invoice.create({
+      data: {
+        clientId: riya.id,
+        amount: 1200,
+        amountPaid: 1200,
+        description: "Design retainer",
+        dueDate,
+        paidAt,
+        status: "paid",
+      },
+    });
+  }
+
+  // 4 more approved_unedited messages for Riya
+  for (let i = 0; i < 4; i++) {
+    await prisma.message.create({
+      data: {
+        invoiceId: riyaInvoice.id,
+        clientId: riya.id,
+        sender: "agent",
+        content: `Follow-up reminder ${i + 1} for Riya invoice.`,
+        status: "approved_unedited",
+        createdAt: new Date(Date.now() - (7 - i) * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
   // ── Client 2: Dev Studio Co — Level 1, pending negotiation in inbox ────────
   const devStudio = await prisma.client.create({
     data: {
@@ -175,6 +212,54 @@ async function main() {
   }
 
   console.log(`  ✓ Client: ${devStudio.name} (Level 1, score 55 — negotiation pending)`);
+
+  // Extra: 2 invoices paid 15+ days late and 1 unpaid overdue invoice
+  await prisma.invoice.create({
+    data: {
+      clientId: devStudio.id,
+      amount: 3000,
+      amountPaid: 3000,
+      description: "Phase 1 development — paid late",
+      dueDate: new Date(Date.now() - 80 * 24 * 60 * 60 * 1000),
+      paidAt: new Date(Date.now() - 62 * 24 * 60 * 60 * 1000), // 18 days late
+      status: "paid",
+    },
+  });
+  await prisma.invoice.create({
+    data: {
+      clientId: devStudio.id,
+      amount: 2500,
+      amountPaid: 2500,
+      description: "Maintenance retainer — paid late",
+      dueDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      paidAt: new Date(Date.now() - 42 * 24 * 60 * 60 * 1000), // 18 days late
+      status: "paid",
+    },
+  });
+  await prisma.invoice.create({
+    data: {
+      clientId: devStudio.id,
+      amount: 1800,
+      amountPaid: 0,
+      description: "API integration work",
+      dueDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days overdue
+      status: "overdue",
+    },
+  });
+
+  // 2 rejected agent messages for Dev Studio
+  for (let i = 0; i < 2; i++) {
+    await prisma.message.create({
+      data: {
+        invoiceId: devInvoice.id,
+        clientId: devStudio.id,
+        sender: "agent",
+        content: `Rejected draft ${i + 1} for Dev Studio.`,
+        status: "rejected",
+        createdAt: new Date(Date.now() - (14 - i) * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
 
   // ── Client 3: Anjali Menon — Level 0, new client, first draft waiting ──────
   const anjali = await prisma.client.create({
@@ -281,6 +366,86 @@ async function main() {
   }
 
   console.log(`  ✓ Client: ${kabir.name} (Level 1, score 60 — dispute escalated)`);
+
+  // ── Client 5: Northwind Labs — score 48 (Level 1 band) but autonomyLevel 0 ──
+  // Demo case: score says Level 1 but late invoice history should produce HOLD from court
+  const northwind = await prisma.client.create({
+    data: {
+      freelancerId: freelancer.id,
+      name: "Northwind Labs",
+      email: "ops@northwind.example",
+      trustScore: 48,
+      autonomyLevel: 0,
+    },
+  });
+
+  const northwindInvoice1 = await prisma.invoice.create({
+    data: {
+      clientId: northwind.id,
+      amount: 5000,
+      amountPaid: 5000,
+      description: "Data pipeline setup",
+      dueDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+      paidAt: new Date(Date.now() - 72 * 24 * 60 * 60 * 1000), // 18 days late
+      status: "paid",
+    },
+  });
+
+  await prisma.invoice.create({
+    data: {
+      clientId: northwind.id,
+      amount: 4500,
+      amountPaid: 4500,
+      description: "Analytics dashboard",
+      dueDate: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+      paidAt: new Date(Date.now() - 38 * 24 * 60 * 60 * 1000), // 22 days late
+      status: "paid",
+    },
+  });
+
+  await prisma.invoice.create({
+    data: {
+      clientId: northwind.id,
+      amount: 3200,
+      amountPaid: 0,
+      description: "ML model deployment",
+      dueDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days overdue
+      status: "overdue",
+    },
+  });
+
+  // 3 approved_unedited messages for Northwind
+  for (let i = 0; i < 3; i++) {
+    await prisma.message.create({
+      data: {
+        invoiceId: northwindInvoice1.id,
+        clientId: northwind.id,
+        sender: "agent",
+        content: `Payment reminder ${i + 1} for Northwind Labs.`,
+        status: "approved_unedited",
+        createdAt: new Date(Date.now() - (10 - i) * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  // Trust events that bring Northwind from 20 to 48
+  const northwindEvents = [
+    { delta: 15, reason: "Freelancer approved draft unedited" },
+    { delta: 15, reason: "Freelancer approved draft unedited" },
+    { delta: -2, reason: "Score adjustment" }, // 20+15+15-2 = 48
+  ];
+  for (const evt of northwindEvents) {
+    await prisma.trustEvent.create({
+      data: {
+        clientId: northwind.id,
+        delta: evt.delta,
+        reason: evt.reason,
+        createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }
+
+  console.log(`  ✓ Client: ${northwind.name} (score 48, Level 0 — court demo case)`);
 
   console.log("\n✅ Seed complete. Run 'npm run dev' to start the app.");
 }

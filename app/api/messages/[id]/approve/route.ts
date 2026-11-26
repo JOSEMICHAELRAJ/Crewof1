@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { applyTrustDelta, TRUST_DELTAS } from '@/lib/trustLadder';
+import { convene } from '@/lib/trustCourt';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const newStatus = wasEdited ? 'approved_edited' : 'approved_unedited';
     const delta = wasEdited ? TRUST_DELTAS.APPROVED_EDITED : TRUST_DELTAS.APPROVED_UNEDITED;
 
+    // Update message status BEFORE applyTrustDelta so evidence counts include this approval
     const updatedMessage = await prisma.message.update({
       where: { id },
       data: { status: newStatus, content: editedContent ?? message.content },
@@ -25,6 +27,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       wasEdited ? 'approved with edits' : 'approved unedited',
       message.id
     );
+
+    if (trustResult.hearingNeeded) {
+      const courtResult = await convene(message.clientId, 'score_threshold');
+      return NextResponse.json({
+        message: updatedMessage,
+        ...trustResult,
+        hearing: courtResult.hearing,
+        leveledUp: courtResult.leveledUp,
+        leveledDown: courtResult.leveledDown,
+      });
+    }
 
     return NextResponse.json({ message: updatedMessage, ...trustResult });
   } catch (err) {

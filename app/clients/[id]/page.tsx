@@ -6,6 +6,7 @@ import Link from "next/link";
 interface TrustEvent { id: string; delta: number; reason: string; createdAt: string; scoreAfter: number; }
 interface Invoice { id: string; amount: number; amountPaid: number; description: string; status: string; dueDate: string; createdAt: string; }
 interface Message { id: string; sender: string; content: string; status: string; createdAt: string; invoice: { id: string; amount: number; description: string; status: string }; }
+interface TrustHearing { id: string; triggerReason: string; prosecution: string; defense: string; verdict: string; reasoning: string; conditions: string | null; fromLevel: number; toLevel: number; createdAt: string; }
 interface ClientDetail {
   id: string; name: string; email: string; company: string | null;
   trustScore: number; autonomyLevel: number; manualOverride: boolean;
@@ -53,11 +54,16 @@ export default function ClientDetailPage() {
   const [overrideLevel, setOverrideLevel] = useState<number | "">("");
   const [showNewInvoice, setShowNewInvoice] = useState(false);
   const [inv, setInv] = useState({ amount: "", description: "", dueDate: "" });
+  const [hearings, setHearings] = useState<TrustHearing[]>([]);
+  const [convening, setConvening] = useState(false);
 
   const load = () =>
     fetch(`/api/clients/${id}`).then((r) => r.json()).then((d) => { setClient(d); setLoading(false); });
 
-  useEffect(() => { load(); }, [id]);
+  const loadHearings = () =>
+    fetch(`/api/clients/${id}/trust-hearings`).then((r) => r.json()).then((d) => { if (Array.isArray(d)) setHearings(d); });
+
+  useEffect(() => { load(); loadHearings(); }, [id]);
 
   async function handleManualOverride() {
     if (overrideLevel === "") return;
@@ -91,6 +97,14 @@ export default function ClientDetailPage() {
     setShowNewInvoice(false);
     setInv({ amount: "", description: "", dueDate: "" });
     load();
+  }
+
+  async function conveneHearing() {
+    setConvening(true);
+    await fetch(`/api/clients/${id}/trust-hearing`, { method: "POST" });
+    setConvening(false);
+    load();
+    loadHearings();
   }
 
   if (loading) return (
@@ -245,6 +259,60 @@ export default function ClientDetailPage() {
             </div>
           ))
         )}
+      </div>
+
+      {/* Trust Court */}
+      <div className="rounded-xl mt-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: "1px solid var(--border)" }}>
+          <p className="text-sm font-semibold">Trust Court</p>
+          <button onClick={conveneHearing} disabled={convening}
+            className="text-xs px-3 py-1 rounded-lg font-medium text-white"
+            style={{ background: "var(--accent)", opacity: convening ? 0.6 : 1 }}>
+            {convening ? "Convening…" : "Convene court"}
+          </button>
+        </div>
+        {hearings.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-center" style={{ color: "var(--text-muted)" }}>No hearings yet.</p>
+        ) : (() => {
+          const h = hearings[0];
+          const verdictColors: Record<string, { bg: string; color: string }> = {
+            PROMOTE: { bg: "#e8f4ef", color: "#1a6348" },
+            HOLD: { bg: "#fef9c3", color: "#b45309" },
+            DEMOTE: { bg: "#fee2e2", color: "#dc2626" },
+          };
+          const vc = verdictColors[h.verdict] ?? { bg: "#f3f4f6", color: "#6b7280" };
+          return (
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="px-3 py-1 rounded-full text-sm font-bold"
+                  style={{ background: vc.bg, color: vc.color }}>{h.verdict}</span>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  L{h.fromLevel} → L{h.toLevel} · {new Date(h.createdAt).toLocaleDateString()} · {h.triggerReason}
+                </span>
+              </div>
+              <p className="text-sm mb-4" style={{ color: "var(--text-primary)" }}>{h.reasoning}</p>
+              {h.conditions && (
+                <p className="text-xs mb-4 px-3 py-2 rounded-lg italic"
+                  style={{ background: "var(--bg)", color: "var(--text-secondary)" }}>Conditions: {h.conditions}</p>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="rounded-lg p-3" style={{ background: "#fee2e220", border: "1px solid #fca5a520" }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: "#dc2626" }}>⚖ Prosecutor</p>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{h.prosecution}</p>
+                </div>
+                <div className="rounded-lg p-3" style={{ background: "#e8f4ef20", border: "1px solid #6ee7b720" }}>
+                  <p className="text-xs font-semibold mb-2" style={{ color: "#1a6348" }}>🛡 Defender</p>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{h.defense}</p>
+                </div>
+              </div>
+              {hearings.length > 1 && (
+                <p className="text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+                  + {hearings.length - 1} earlier hearing{hearings.length > 2 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
